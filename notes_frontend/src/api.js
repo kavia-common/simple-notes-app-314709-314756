@@ -15,12 +15,39 @@
  * Keeping this centralized prevents hardcoding URLs throughout the app.
  */
 function getApiBaseUrl() {
-  const base =
-    (process.env.REACT_APP_API_BASE || process.env.REACT_APP_BACKEND_URL || "").trim();
+  const raw = (process.env.REACT_APP_API_BASE || process.env.REACT_APP_BACKEND_URL || "").trim();
 
-  // Normalize trailing slash
-  if (!base) return "";
-  return base.endsWith("/") ? base.slice(0, -1) : base;
+  /**
+   * In development, prefer same-origin (empty base URL) so CRA's dev proxy
+   * (src/setupProxy.js) can forward requests to the backend without triggering
+   * browser CORS restrictions.
+   *
+   * If the user explicitly sets a relative base like "/api", keep it.
+   * If the user explicitly sets an absolute URL (http/https), keep it.
+   */
+  const isDev = (process.env.NODE_ENV || "").toLowerCase() === "development";
+
+  if (!raw) return "";
+
+  // Relative base path like "/api" should be used as-is (no trailing slash)
+  if (raw.startsWith("/")) {
+    return raw.endsWith("/") ? raw.slice(0, -1) : raw;
+  }
+
+  // Absolute URL: keep it (normalized)
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    const normalized = raw.endsWith("/") ? raw.slice(0, -1) : raw;
+
+    // If we're in dev and they set an absolute URL pointing to the same host as the frontend,
+    // it's fine. If it's cross-origin, it may require backend CORS; the proxy approach is safer.
+    // We still respect the explicit configuration.
+    return normalized;
+  }
+
+  // Any other odd value: in dev, fall back to same-origin to allow proxying;
+  // otherwise treat as-is (best effort).
+  if (isDev) return "";
+  return raw.endsWith("/") ? raw.slice(0, -1) : raw;
 }
 
 /**
